@@ -1,0 +1,11 @@
+[package]
+name = "light2d-rs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chrono = "0.4.40"
+clap = { version = "4.5.31", features = ["derive"] }
+image = { version = "0.24", features = ["rayon"] }
+rand = "0.9.0"
+rayon = "1.10.0"
