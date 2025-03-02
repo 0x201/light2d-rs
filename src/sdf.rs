@@ -48,12 +48,12 @@ fn ngon_sdf(o: Vec2, c: Vec2, r: f64, n: f64) -> f64 {
     let t = (u.y.atan2(u.x) + TWO_PI) % a;
     let s = u.length();
 
-    let cost = t.cos();
-    let sint = t.sin();
+    let cos_t = t.cos();
+    let sin_t = t.sin();
     let cos_a_half = (a * 0.5).cos();
     let sin_a_half = (a * 0.5).sin();
     plane_sdf(
-        Vec2::new(s * cost, s * sint),
+        Vec2::new(s * cos_t, s * sin_t),
         Vec2::new(r, 0.0),
         Vec2::new(cos_a_half, sin_a_half),
     )
@@ -74,12 +74,12 @@ fn capsule_sdf(o: Vec2, a: Vec2, b: Vec2, r: f64) -> f64 {
 
 fn box_sdf(o: Vec2, c: Vec2, theta: f64, s: Vec2) -> f64 {
     let shift = o - c;
-    let costheta = theta.cos();
-    let sintheta = theta.sin();
+    let cos_theta = theta.cos();
+    let sin_theta = theta.sin();
 
     let r = Vec2::new(
-        (shift.x * costheta + shift.y * sintheta).abs(),
-        (shift.y * costheta - shift.x * sintheta).abs(),
+        (shift.x * cos_theta + shift.y * sin_theta).abs(),
+        (shift.y * cos_theta - shift.x * sin_theta).abs(),
     );
 
     let d = r - s;
@@ -334,7 +334,7 @@ fn beer_lambert_scene(o: Vec2) -> SdfResult {
         reflectivity: 0.0,
         eta: 1.5,
         emissive: BLACK,
-        absorption: Color::new(4.0, 4.0, 1.0),
+        absorption: Color::new(141.0, 173.0, 114.0),
     };
     union(a, b)
 }
@@ -352,28 +352,28 @@ fn reflect(i: Vec2, n: Vec2) -> Vec2 {
 }
 
 fn refract(i: Vec2, n: Vec2, eta: f64) -> Option<Vec2> {
-    let idotn = i.dot(&n);
-    let k = 1.0 - eta.powi(2) * (1.0 - idotn.powi(2));
+    let i_dot_n = i.dot(&n);
+    let k = 1.0 - eta.powi(2) * (1.0 - i_dot_n.powi(2));
 
     if k < 0.0 {
         // Total internal reflection
         None
     } else {
-        let a = eta * idotn + k.sqrt();
+        let a = eta * i_dot_n + k.sqrt();
         Some(i * eta - n * a)
     }
 }
 
-fn fresnel(cosi: f64, cost: f64, etai: f64, etat: f64) -> f64 {
-    let rs = (etat * cosi - etai * cost) / (etat * cosi + etai * cost);
-    let rp = (etai * cosi - etat * cost) / (etai * cosi + etat * cost);
+fn fresnel(cos_i: f64, cos_t: f64, eta_i: f64, eta_t: f64) -> f64 {
+    let rs = (eta_t * cos_i - eta_i * cos_t) / (eta_t * cos_i + eta_i * cos_t);
+    let rp = (eta_i * cos_i - eta_t * cos_t) / (eta_i * cos_i + eta_t * cos_t);
     (rs * rs + rp * rp) * 0.5
 }
 
-fn schlick(cosi: f64, cost: f64, etai: f64, etat: f64) -> f64 {
-    let mut r0 = (etai - etat) / (etai + etat);
+fn schlick(cos_i: f64, cos_t: f64, eta_i: f64, eta_t: f64) -> f64 {
+    let mut r0 = (eta_i - eta_t) / (eta_i + eta_t);
     r0 *= r0;
-    let a = 1.0 - (if etai < etat { cosi } else { cost });
+    let a = 1.0 - (if eta_i < eta_t { cos_i } else { cos_t });
     let aa = a * a;
     r0 + (1.0 - r0) * aa * aa * a
 }
@@ -410,18 +410,18 @@ fn trace(o: Vec2, d: Vec2, depth: i32) -> Color {
                     let eta = if sign < 0.0 { r.eta } else { 1.0 / r.eta };
 
                     if let Some(refracted_dir) = refract(d, n, eta) {
-                        let cosi = -d.dot(&n);
+                        let cos_i = -d.dot(&n);
                         let cost = -refracted_dir.dot(&n);
                         refl = if sign < 0.0 {
-                            fresnel(cosi, cost, r.eta, 1.0)
+                            fresnel(cos_i, cost, r.eta, 1.0)
                         } else {
-                            fresnel(cosi, cost, 1.0, r.eta)
+                            fresnel(cos_i, cost, 1.0, r.eta)
                         };
 
                         // refl = if sign < 0.0 {
-                        //     schlick(cosi, cost, r.eta, 1.0)
+                        //     schlick(cos_i, cost, r.eta, 1.0)
                         // } else {
-                        //     schlick(cosi, cost, 1.0, r.eta)
+                        //     schlick(cos_i, cost, 1.0, r.eta)
                         // };
 
                         refl = refl.min(1.0).max(0.0);
