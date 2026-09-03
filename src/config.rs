@@ -3,24 +3,19 @@ use clap::Parser;
 #[derive(Clone)]
 pub struct RenderConfig {
     pub output_name: String,
+    pub output_dir: String,
     pub sample_count: usize,
     pub width: u32,
     pub height: u32,
+    pub scene: String,
+    pub scene_file: Option<String>,
 }
 
 impl RenderConfig {
     const DEFAULT_WIDTH: u32 = 512;
     const DEFAULT_HEIGHT: u32 = 512;
     const DEFAULT_SAMPLE_COUNT: usize = 1024;
-
-    pub fn new(width: u32, height: u32, sample_count: usize, output_name: String) -> Self {
-        Self {
-            width,
-            height,
-            sample_count,
-            output_name,
-        }
-    }
+    const DEFAULT_OUTPUT_DIR: &'static str = "output";
 
     pub fn from_args() -> Self {
         let args = Args::parse();
@@ -29,7 +24,12 @@ impl RenderConfig {
             width: args.width.unwrap_or(Self::DEFAULT_WIDTH),
             height: args.height.unwrap_or(Self::DEFAULT_HEIGHT),
             sample_count: args.samples.unwrap_or(Self::DEFAULT_SAMPLE_COUNT),
-            output_name: args.output_filename,
+            output_name: args.output_name,
+            output_dir: args
+                .output_dir
+                .unwrap_or_else(|| Self::DEFAULT_OUTPUT_DIR.to_string()),
+            scene: args.scene,
+            scene_file: args.scene_file,
         }
     }
 }
@@ -51,5 +51,17 @@ struct Args {
 
     /// Output filename
     #[clap(value_parser)]
-    output_filename: String,
+    output_name: String,
+
+    /// Output directory
+    #[clap(long, value_parser, default_value = "output")]
+    output_dir: Option<String>,
+
+    /// Scene name: shape, reflect, refaction, beer
+    #[clap(long, value_parser, default_value = "beer")]
+    scene: String,
+
+    /// Path to a JSON scene description file (overrides --scene)
+    #[clap(long, value_parser)]
+    scene_file: Option<String>,
 }

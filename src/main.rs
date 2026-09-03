@@ -1,8 +1,7 @@
-use light2d_rs::render_config::RenderConfig;
-use light2d_rs::render;
+use light2d_rs::{config::RenderConfig, render::render, scene::build_scene};
 
 fn main() {
     let config = RenderConfig::from_args();
-
-    render(&config);
+    let scene = build_scene(&config);
+    render(&config, &*scene);
 }
