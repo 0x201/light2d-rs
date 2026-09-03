@@ -1,0 +1,31 @@
+{
+  "type": "Union",
+  "children": [
+    {
+      "type": "Circle",
+      "center": [0.4, 0.2],
+      "radius": 0.1,
+      "material": {
+        "emissive": [2.0, 2.0, 2.0]
+      }
+    },
+    {
+      "type": "Box",
+      "center": [0.5, 0.8],
+      "theta": 0.3927,
+      "half_size": [0.1, 0.1],
+      "material": {
+        "reflectivity": 0.9
+      }
+    },
+    {
+      "type": "Box",
+      "center": [0.8, 0.5],
+      "theta": 0.3927,
+      "half_size": [0.1, 0.1],
+      "material": {
+        "reflectivity": 0.9
+      }
+    }
+  ]
+}

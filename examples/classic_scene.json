@@ -1,0 +1,67 @@
+{
+  "type": "Union",
+  "children": [
+    {
+      "type": "Circle",
+      "center": [0.3, 0.8],
+      "radius": 0.06,
+      "material": {
+        "emissive": [8.0, 8.0, 2.0]
+      }
+    },
+    {
+      "type": "Circle",
+      "center": [0.7, 0.8],
+      "radius": 0.06,
+      "material": {
+        "emissive": [2.0, 8.0, 8.0]
+      }
+    },
+    {
+      "type": "Circle",
+      "center": [0.4, 0.5],
+      "radius": 0.15,
+      "material": {
+        "reflectivity": 0.9,
+        "eta": 0.0,
+        "emissive": [0.0, 0.0, 0.0],
+        "absorption": [0.0, 0.0, 0.0]
+      }
+    },
+    {
+      "type": "Circle",
+      "center": [0.7, 0.45],
+      "radius": 0.12,
+      "material": {
+        "reflectivity": 0.1,
+        "eta": 1.5,
+        "emissive": [0.0, 0.0, 0.0],
+        "absorption": [0.3, 0.1, 0.4]
+      }
+    },
+    {
+      "type": "Box",
+      "center": [0.6, 0.2],
+      "theta": 0.2,
+      "half_size": [0.08, 0.12],
+      "material": {
+        "reflectivity": 0.6,
+        "eta": 0.0,
+        "emissive": [0.2, 0.0, 0.0],
+        "absorption": [0.0, 0.0, 0.0]
+      }
+    },
+    {
+      "type": "Box",
+      "center": [0.25, 0.2],
+      "theta": -0.3,
+      "half_size": [0.1, 0.1],
+      "material": {
+        "reflectivity": 0.0,
+        "eta": 1.3,
+        "emissive": [0.0, 0.0, 0.0],
+        "absorption": [0.6, 0.9, 0.3]
+      }
+    }
+  ]
+}
