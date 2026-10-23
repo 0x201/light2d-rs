@@ -1,0 +1,1 @@
+> light2d-rs.exe beer_lambert_scene_with_scene_file --scene-file ./examples/beer_lambert_scene.json --output-dir ./output 

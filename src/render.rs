@@ -1,8 +1,12 @@
+use crate::ambient::Ambient;
+
+use std::sync::OnceLock;
 use std::time::Instant;
 
 use chrono::{FixedOffset, Utc};
 use image::{ImageBuffer, Rgb};
-use rand::Rng;
+use rand::rngs::SmallRng;
+use rand::{Rng, SeedableRng};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 use crate::{
@@ -16,7 +20,28 @@ const BIAS: f64 = 1e-4;
 const EPSILON: f64 = 1e-6;
 const MAX_STEP: i32 = 32;
 const MAX_DISTANCE: f64 = 5.0;
-const MAX_DEPTH: i32 = 3;
+const MAX_DEPTH: i32 = 5;
+
+static HALTON_ANGELS: OnceLock<Vec<f64>> = OnceLock::new();
+
+fn get_halton_angles(count: usize) -> &'static Vec<f64> {
+    HALTON_ANGELS.get_or_init(|| {
+        (0..count)
+            .map(|i| {
+                let mut index = i;
+                let mut result = 0.0;
+                let mut f = 1.0;
+                let base = 2;
+                while index > 0 {
+                    f /= base as f64;
+                    result += f * (index % base) as f64;
+                    index /= base;
+                }
+                TWO_PI * result
+            })
+            .collect()
+    })
+}
 
 fn reflect(i: Vec2, n: Vec2) -> Vec2 {
     i - n * 2.0 * i.dot(&n)
@@ -59,17 +84,46 @@ fn beer_lambert(absorption: Color, distance: f64) -> Color {
 }
 
 fn gradient(p: Vec2, scene: &dyn Shape) -> Vec2 {
-    let eps = EPSILON;
-    let nx = (scene.sdf_result(Vec2::new(p.x + eps, p.y)).sd
-        - scene.sdf_result(Vec2::new(p.x - eps, p.y)).sd)
-        * (0.5 / eps);
-    let ny = (scene.sdf_result(Vec2::new(p.x, p.y + eps)).sd
-        - scene.sdf_result(Vec2::new(p.x, p.y - eps)).sd)
-        * (0.5 / eps);
+    let nx = (scene.sdf(Vec2::new(p.x + EPSILON, p.y)) - scene.sdf(Vec2::new(p.x - EPSILON, p.y)))
+        * (0.5 / EPSILON);
+    let ny = (scene.sdf(Vec2::new(p.x, p.y + EPSILON)) - scene.sdf(Vec2::new(p.x, p.y - EPSILON)))
+        * (0.5 / EPSILON);
     Vec2::new(nx, ny)
 }
 
-fn trace(origin: Vec2, direction: Vec2, depth: i32, scene: &dyn Shape) -> Color {
+/// Ambient occlusion
+#[allow(unused)]
+fn ao(p: Vec2, n: Vec2, scene: &dyn Shape) -> f64 {
+    let mut ao = 0.0;
+    let scale = 0.5;
+    let weight = 5;
+    for i in 0..weight {
+        let dist = 0.02 + 0.05 * i as f64;
+        let d = scene.sdf_result(p + n * dist).sd;
+        ao += (dist - d).max(0.0) * scale;
+    }
+    1.0 - ao.min(1.0)
+}
+
+// TODOs:
+// Soft Shadows
+// Ambient Light
+// BRDF
+// Caustics
+
+fn halton(mut index: usize) -> f64 {
+    let mut result = 0.0;
+    let mut f = 1.0;
+    let base = 2;
+    while index > 0 {
+        f /= base as f64;
+        result += f * (index % base) as f64;
+        index /= base;
+    }
+    result
+}
+
+fn trace(origin: Vec2, direction: Vec2, depth: i32, scene: &dyn Shape, ambient: &Ambient) -> Color {
     let mut t = 0.0;
     let sign = if scene.sdf_result(origin).sd > 0.0 {
         1.0
@@ -113,7 +167,7 @@ fn trace(origin: Vec2, direction: Vec2, depth: i32, scene: &dyn Shape) -> Color 
                         refl = refl.min(1.0).max(0.0);
 
                         sum = sum
-                            + (trace(center - n * BIAS, refracted_dir, depth + 1, scene)
+                            + (trace(center - n * BIAS, refracted_dir, depth + 1, scene, ambient)
                                 * (1.0 - refl));
                     } else {
                         refl = 1.0; // Total internal reflection
@@ -122,25 +176,29 @@ fn trace(origin: Vec2, direction: Vec2, depth: i32, scene: &dyn Shape) -> Color 
 
                 if refl > 0.0 {
                     let reflected_dir = reflect(direction, n);
-                    sum = sum + trace(center + n * BIAS, reflected_dir, depth + 1, scene) * refl;
+                    sum = sum
+                        + trace(center + n * BIAS, reflected_dir, depth + 1, scene, ambient) * refl;
                 }
             }
             return sum * beer_lambert(r.absorption, t);
         }
         t += r.sd * sign;
     }
-    BLACK
+    ambient.sample(direction)
 }
 
-pub fn sample_pixel(uv: Vec2, sample_count: usize, scene: &dyn Shape) -> Color {
+pub fn sample_pixel(uv: Vec2, sample_count: usize, scene: &dyn Shape, ambient: &Ambient) -> Color {
+    let seed = ((uv.x * 65_536.0) as u64) ^ ((uv.y * 65_536.0) as u64) ^ 0xDEADBEEF;
+    let mut rng = SmallRng::seed_from_u64(seed);
+    let offset = rng.random::<f64>();
+
     let sum = (0..sample_count)
         .into_par_iter()
         .fold(
             || BLACK,
             |acc, i| {
-                let mut rng = rand::rng();
-                let a = TWO_PI * (i as f64 + rng.random::<f64>()) / (sample_count as f64);
-                let color = trace(uv, Vec2::new(a.cos(), a.sin()), 0, scene);
+                let a = TWO_PI * (i as f64 + offset) / (sample_count as f64);
+                let color = trace(uv, Vec2::new(a.cos(), a.sin()), 0, scene, ambient);
                 acc + color
             },
         )
@@ -148,7 +206,64 @@ pub fn sample_pixel(uv: Vec2, sample_count: usize, scene: &dyn Shape) -> Color {
     sum * (1.0 / sample_count as f64)
 }
 
-pub fn render(config: &RenderConfig, scene: &dyn Shape) {
+pub fn sample_pixel_random(
+    uv: Vec2,
+    sample_count: usize,
+    scene: &dyn Shape,
+    ambient: &Ambient,
+) -> Color {
+    let mut sum = BLACK;
+    let mut rng = SmallRng::seed_from_u64(
+        ((uv.x * 65_536.0) as u64) ^ ((uv.y * 65_536.0) as u64) ^ 0xFEEDFACE,
+    );
+    for _ in 0..sample_count {
+        let angle = TWO_PI * rng.random::<f64>();
+        let dir = Vec2::new(angle.cos(), angle.sin());
+        sum = sum + trace(uv, dir, 0, scene, ambient);
+    }
+    sum * (1.0 / sample_count as f64)
+}
+
+pub fn sample_pixel2(uv: Vec2, sample_count: usize, scene: &dyn Shape, ambient: &Ambient) -> Color {
+    let seed = ((uv.x * 65_536.0) as u64) ^ ((uv.y * 65_536.0) as u64) ^ 0xDEADBEEF;
+    let mut rng = SmallRng::seed_from_u64(seed);
+    let offset = rng.random::<f64>();
+
+    let sum = (0..sample_count)
+        .into_par_iter()
+        .map(|i| {
+            //let u = (offset + (i as f64) / (sample_count as f64)).fract();
+            let index = i + (offset * 1_024.0) as usize;
+            let angle = TWO_PI * halton(index);
+            let dir = Vec2::new(angle.cos(), angle.sin());
+            trace(uv, dir, 0, scene, ambient)
+        })
+        .reduce(|| BLACK, |a, b| a + b);
+    sum * (1.0 / sample_count as f64)
+}
+
+pub fn sample_pixel_halton(
+    uv: Vec2,
+    sample_count: usize,
+    scene: &dyn Shape,
+    ambient: &Ambient,
+) -> Color {
+    let seed = ((uv.x * 65_536.0) as u64) ^ ((uv.y * 65_536.0) as u64) ^ 0xDEADBEEF;
+    let mut rng = SmallRng::seed_from_u64(seed);
+    let offset = (rng.random::<f64>() * sample_count as f64) as usize;
+
+    let angels = get_halton_angles(sample_count);
+    let mut sum = BLACK;
+
+    for i in 0..sample_count {
+        let index = (i + offset) % sample_count;
+        let dir = Vec2::new(angels[index].cos(), angels[index].sin());
+        sum = sum + trace(uv, dir, 0, scene, ambient);
+    }
+    sum * (1.0 / sample_count as f64)
+}
+
+pub fn render(config: &RenderConfig, scene: &dyn Shape, ambient: &Ambient) {
     let start = Instant::now();
 
     let width = config.width;
@@ -161,7 +276,9 @@ pub fn render(config: &RenderConfig, scene: &dyn Shape) {
         let u = x as f64 / width as f64;
         let v = y as f64 / height as f64;
         let uv = Vec2::new(u, v);
-        let color = sample_pixel(uv, sample_count, scene);
+        //let color = sample_pixel(uv, sample_count, scene);
+        //let color = sample_pixel2(uv, sample_count, scene);
+        let color = sample_pixel_halton(uv, sample_count, scene, ambient);
 
         let r = (color.r.clamp(0.0, 1.0) * 255.0) as u8;
         let g = (color.g.clamp(0.0, 1.0) * 255.0) as u8;

@@ -1,3 +1,5 @@
+use crate::ambient::Ambient;
+
 use std::fs;
 
 use serde::Deserialize;
@@ -83,12 +85,23 @@ pub struct Material {
     pub emissive: Option<[f64; 3]>,
     #[serde(default)]
     pub absorption: Option<[f64; 3]>,
+    #[serde(default)]
+    pub emissive_color: Option<[u8; 3]>,
+    #[serde(default)]
+    pub absorption_color: Option<[u8; 3]>,
 }
 
 impl Material {
     fn emissive_color(&self) -> Color {
         if let Some(c) = self.emissive {
             Color::new(c[0], c[1], c[2])
+        } else if let Some(c) = self.emissive_color {
+            let scale = 10.0 / 255.0;
+            Color::new(
+                c[0] as f64 * scale,
+                c[1] as f64 * scale,
+                c[2] as f64 * scale,
+            )
         } else {
             BLACK
         }
@@ -96,6 +109,13 @@ impl Material {
     fn absorption_color(&self) -> Color {
         if let Some(c) = self.absorption {
             Color::new(c[0], c[1], c[2])
+        } else if let Some(c) = self.absorption_color {
+            let scale = 3.0 / 255.0;
+            Color::new(
+                (255 - c[0]) as f64 * scale,
+                (255 - c[1]) as f64 * scale,
+                (255 - c[2]) as f64 * scale,
+            )
         } else {
             BLACK
         }
@@ -214,8 +234,22 @@ impl ShapeNode {
     }
 }
 
-pub fn load_scene_from_file(path: &str) -> Box<dyn Shape> {
+#[derive(Deserialize)]
+pub struct SceneFile {
+    #[serde(default)]
+    pub ambient: Ambient,
+    pub shape: ShapeNode,
+}
+
+pub fn load_scene_from_file(path: &str) -> (Box<dyn Shape>, Ambient) {
     let content = fs::read_to_string(path).expect("Failed to read scene file");
-    let node: ShapeNode = serde_json::from_str(&content).expect("Failed to parse JSON");
-    node.build()
+    let value: serde_json::Value = serde_json::from_str(&content).expect("Invalid JSON syntax");
+
+    if value.get("shape").is_some() {
+        let sf: SceneFile = serde_json::from_value(value).expect("Invalid scene file format");
+        (sf.shape.build(), sf.ambient)
+    } else {
+        let node: ShapeNode = serde_json::from_str(&content).expect("Failed to parse JSON");
+        (node.build(), Ambient::default())
+    }
 }

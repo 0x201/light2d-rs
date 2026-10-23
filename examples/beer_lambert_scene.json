@@ -1,23 +1,30 @@
 {
-  "type": "Union",
-  "children": [
-    {
-      "type": "Circle",
-      "center": [0.5, -0.2],
-      "radius": 0.1,
-      "material": {
-        "emissive": [10.0, 10.0, 10.0]
+  "ambient": {
+    "type": "gradient",
+    "top": [0.12, 0.15, 0.25],
+    "bottom": [0.02, 0.02, 0.04]
+  },
+  "shape": {
+    "type": "Union",
+    "children": [
+      {
+        "type": "Circle",
+        "center": [0.5, -0.2],
+        "radius": 0.1,
+        "material": {
+          "emissive_color": [255, 255, 255]
+        }
+      },
+      {
+        "type": "Ngon",
+        "center": [0.5, 0.5],
+        "radius": 0.25,
+        "n": 5.0,
+        "material": {
+          "eta": 1.5,
+          "absorption_color": [150, 206, 180]
+        }
       }
-    },
-    {
-      "type": "Ngon",
-      "center": [0.5, 0.5],
-      "radius": 0.25,
-      "n": 5.0,
-      "material": {
-        "eta": 1.5,
-        "absorption": [1.41, 1.73, 1.14]
-      }
-    }
-  ]
+    ]
+  }
 }
